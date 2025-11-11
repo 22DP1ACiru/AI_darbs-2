@@ -3,8 +3,35 @@ from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+chatbot = ChatbotService()
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_endpoint():
+    """
+    Receives a user message and returns an AI-generated response.
+    This will be called via AJAX/fetch from the frontend.
+    """
+    data = request.get_json()
+
+    if not data or "message" not in data:
+        return {"error": "Missing 'message' in request."}, 400
+
+    user_message = data["message"]
+    chat_history = data.get("history", [])
+
+    # Get product list string for the LLM (optional but recommended)
+    product_info = get_products_from_db()
+
+    # Combine user message with product info
+    full_user_message = f"{product_info}\n\nUser message: {user_message}"
+
+    # Call your ChatbotService
+    reply = chatbot.get_chatbot_response(full_user_message, chat_history)
+
+    return reply, 200
 
 def get_products_from_db():
     """

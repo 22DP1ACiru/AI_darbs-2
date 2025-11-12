@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 class ChatbotService:
     def __init__(self):
-        # original TODO comments stay to track each step
+        # oriģinālie TODO komentāri paliek, lai izsekotu katru soli
         # TODO: 1. SOLIS - API atslēgas ielāde
         # load_dotenv(), lai ielādētu mainīgos no .env faila.
         # os.getenv(), lai nolasītu "HUGGINGFACE_API_KEY".
@@ -47,9 +47,9 @@ class ChatbotService:
         messages = [
             {"role": "system", "content": self.system_instruction}
         ]
-        # add conversation history
+        # pievienot sarunu vēsturi
         messages.extend(chat_history)
-        # add current user message
+        # pievienot pašreizējo lietotāja ziņojumu
         messages.append({"role": "user", "content": user_message})
         try:
             # TODO: 5. SOLIS - HF API izsaukums ar OpenAI bibliotēku, izmantojot chat.completions.create().
@@ -70,7 +70,7 @@ class ChatbotService:
                 return {"response": "Sorry, I couldn't generate a response. Please try again.", "status": "error"}
                 
         except Exception as e:
-            # error handling for call failures
+            # error handling, ja radās call kļūdas
             error_message = f"Sorry, I'm experiencing technical difficulties. Please try again later. Error: {str(e)}"
             return {"response": error_message, "status": "error"}
         

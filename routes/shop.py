@@ -1,10 +1,14 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# inicializēt ChatbotService
+chatbot_service = ChatbotService()
 
 def get_products_from_db():
     """
@@ -23,6 +27,42 @@ def get_products_from_db():
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    Handle chatbot requests from the frontend.
+    """
+    try:
+        # saņemt JSON datus no pieprasījuma
+        data = request.get_json()
+        # validēt pieprasījuma datus
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'response': 'No data provided'
+            }), 400
+        
+        user_message = data.get('message')
+        chat_history = data.get('chat_history', [])
+        # validēt lietotāja ziņojumu
+        if not user_message or not user_message.strip():
+            return jsonify({
+                'status': 'error',
+                'response': 'Empty message'
+            }), 400
+        
+        # saņemt chatbot atbildi
+        response_data = chatbot_service.get_chatbot_response(user_message, chat_history)
+        # atgriezt atbildi
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"Chatbot endpoint error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'response': 'Internal server error. Please try again later.'
+        }), 500
 
 @shop_bp.route('/shop')
 def product_list():

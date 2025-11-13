@@ -1,10 +1,14 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# Inicializējam čatbota servisu
+chatbot_service = ChatbotService()
 
 def get_products_from_db():
     """
@@ -23,6 +27,89 @@ def get_products_from_db():
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
+
+def get_products_list():
+    """
+    Iegūst produktu sarakstu no datubāzes strukturētā formātā.
+    Atgriež sarakstu ar produktu objektiem, kas satur visu nepieciešamo informāciju.
+    """
+    try:
+        products = Product.query.all()
+        products_list = []
+        
+        for product in products:
+            products_list.append({
+                'id': product.id,
+                'name': product.name,
+                'description': product.description if hasattr(product, 'description') else '',
+                'price': float(product.price),
+                'stock': product.stock
+            })
+        
+        return products_list
+    except Exception as e:
+        print(f"Kļūda, iegūstot produktus no DB: {e}")
+        return []
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    Čatbota endpoint, kas apstrādā lietotāja ziņas un atgriež AI atbildi.
+    
+    Gaida JSON ar:
+    - message: lietotāja ziņa (string)
+    - chat_history: sarunas vēsture (list, opcija)
+    
+    Atgriež JSON ar:
+    - response: čatbota atbilde (string)
+    - success: vai pieprasījums bija veiksmīgs (boolean)
+    - error: kļūdas ziņojums, ja pieprasījums neizdevās (string, opcija)
+    """
+    try:
+        # Saņem datus no pieprasījuma
+        data = request.get_json()
+        
+        # Validē, vai ir saņemta ziņa
+        if not data or 'message' not in data:
+            return jsonify({
+                'response': 'Lūdzu, nosūtiet derīgu ziņu.',
+                'success': False,
+                'error': 'Nav saņemta ziņa'
+            }), 400
+        
+        user_message = data.get('message', '').strip()
+        chat_history = data.get('chat_history', [])
+        
+        # Pārbauda, vai ziņa nav tukša
+        if not user_message:
+            return jsonify({
+                'response': 'Lūdzu, ievadiet ziņu.',
+                'success': False,
+                'error': 'Tukša ziņa'
+            }), 400
+        
+        # Iegūst produktu sarakstu no datubāzes
+        products = get_products_list()
+        
+        # Izsauc čatbota servisu ar produktu informāciju
+        # Izmanto paplašināto metodi, kas iekļauj produktu kontekstu
+        response = chatbot_service.get_chatbot_response_with_products(
+            user_message=user_message,
+            chat_history=chat_history,
+            products=products
+        )
+        
+        # Atgriež atbildi JSON formātā
+        return jsonify(response), 200
+        
+    except Exception as e:
+        # Kļūdas apstrāde
+        print(f"Kļūda /chatbot endpoint: {str(e)}")
+        return jsonify({
+            'response': 'Atvainojiet, notika servera kļūda. Lūdzu, mēģiniet vēlreiz.',
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @shop_bp.route('/shop')
 def product_list():

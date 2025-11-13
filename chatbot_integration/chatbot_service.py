@@ -15,15 +15,16 @@ class ChatbotService:
         # TODO: 2. SOLIS - OpenAI klienta inicializācija izmantojot "katanemo/Arch-Router-1.5B" modeli
         self.client = OpenAI(
             base_url="https://router.huggingface.co/v1",
-            model="katanemo/Arch-Router-1.5B"
+            api_key=os.environ["HUGGINGFACE_API_KEY"],
         )
 
         # TODO: 3. SOLIS - Sistēmas instrukcijas definēšana
         self.system_instruction = (
-            "Tu esi e-veikala virtuālais asistents. "
-            "Atbildi tikai uz jautājumiem par produktiem, kategorijām, cenām, "
-            "piegādi, atgriešanu un veikala informāciju. "
-            "Ja jautājums nav saistīts ar veikalu, pieklājīgi pasaki, ka to nevarēsi palīdzēt."
+            "You are a virtual assistant for an online shop. "
+            "Answer only questions related to products, categories, prices, "
+            "shipping, returns, and store information. "
+            "If the question is unrelated to the shop, politely inform that you cannot assist."
+            "If you are asked in other languages, say that you can only respond in English."
         )
 
     def get_chatbot_response(self, user_message, chat_history=None, products_text=""):
@@ -47,23 +48,28 @@ class ChatbotService:
             response = self.client.chat.completions.create(
                 model="katanemo/Arch-Router-1.5B",
                 messages=messages,
-                max_tokens=200,
+                max_tokens=1024,
                 temperature=0.5,
                 top_p=0.9,
                 frequency_penalty=0,
                 presence_penalty=0
             )
         except Exception as e:
-            return {"response": f"Kļūda, sazinoties ar API: {str(e)}"}
+            return {"response": f"Error contacting API: {str(e)}"}
         
         # TODO: 6. SOLIS - Atbildes apstrāde un atgriešana
         # chat.completions.create() atgriež objektu ar "choices" sarakstu, tajā jāparbauda, vai ir pieejama atbilde
         try:
-            ai_reply = response.choices[0].message['content']
-        except:
-            ai_reply = "Neizdevās saņemt atbildi no MI modeļa."
+            # HuggingFace Router var atgriezt vairākos formātos
+            if hasattr(response, "choices"):
+                ai_reply = response.choices[0].message.content
+            elif hasattr(response, "output"):
+                ai_reply = response.output[0].content[0].text
+            elif hasattr(response, "output_text"):
+                ai_reply = response.output_text
+            else:
+                ai_reply = str(response)
+        except Exception as e:
+            ai_reply = f"Error processing response: {str(e)}"
 
         return {"response": ai_reply}
-
-        # Pagaidu atbilde, kas jāaizvieto ar reālo API atbildi tiklīdz būs implementēts.
-        return {"response": "AI API response is not implemented yet."}

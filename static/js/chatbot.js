@@ -73,9 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatInput.value = "";
         chatInput.style.height = `auto`;
-
-        chatbox.appendChild(createChatLi(userMessage, "outgoing"));
-        chatbox.scrollTo(0, chatbox.scrollHeight);
         
         // Pievieno lietotāja burbuli UI
         chatbox.appendChild(createChatLi(userMessage, "outgoing"));

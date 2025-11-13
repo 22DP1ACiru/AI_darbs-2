@@ -1,34 +1,65 @@
 import os
-from openai import OpenAI
+from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
+from pathlib import Path
 
 class ChatbotService:
     def __init__(self):
-        # TODO: 1. SOLIS - API atslēgas ielāde
-        # load_dotenv(), lai ielādētu mainīgos no .env faila.
-        # os.getenv(), lai nolasītu "HUGGINGFACE_API_KEY".
+        # 1. SOLIS - .env faila ielāde ar diagnostiku
+        env_path = Path('.') / '.env'
+        load_dotenv(dotenv_path=env_path)
+        hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
-        # TODO: 2. SOLIS - OpenAI klienta inicializācija izmantojot "katanemo/Arch-Router-1.5B" modeli
-        self.client = None
+        # Diagnostika
+        if hf_api_key is None:
+            raise ValueError(
+                "HUGGINGFACE_API_KEY nav iestatīts vai .env fails netika atrasts!"
+            )
+        else:
+            print("HUGGINGFACE_API_KEY ir veiksmīgi ielādēts (rādīts tikai sākuma daļa):", hf_api_key[:5] + "...")
 
-        # TODO: 3. SOLIS - Sistēmas instrukcijas definēšana
+        # 2. SOLIS - Hugging Face Inference klienta inicializācija
+        try:
+            self.client = InferenceClient(hf_api_key)
+            print("Hugging Face klienta inicializācija veiksmīga.")
+        except Exception as e:
+            raise ValueError(f"Neizdevās inicializēt HF klientu: {e}")
+
+        # 3. SOLIS - Sistēmas instrukcijas definēšana
         self.system_instruction = (
+            "Tu esi draudzīgs un zinošs AI palīgs, kas palīdz lietotājam ar dažādiem jautājumiem."
         )
 
     def get_chatbot_response(self, user_message, chat_history=None):
         if chat_history is None:
             chat_history = []
-            
-        # TODO: 4. SOLIS - Ziņojumu saraksta izveide masīvā
-        # Tajā jābūt sistēmas instrukcijai, visai sarunas vēsture un pēdējai lietotāja ziņa.
-        # 1. Sistēmas instrukcija (role: "system")
-        # 2. Visa iepriekšējā sarunas vēsture (izmantojot .extend(), lai pievienotu visus elementus no chat_history)
-        # 3. Pēdējā lietotāja ziņa (role: "user")
-        
-        # TODO: 5. SOLIS - HF API izsaukums ar OpenAI bibliotēku, izmantojot chat.completions.create().
-        
-        # TODO: 6. SOLIS - Atbildes apstrāde un atgriešana
-        # chat.completions.create() atgriež objektu ar "choices" sarakstu, tajā jāparbauda, vai ir pieejama atbilde
 
-        # Pagaidu atbilde, kas jāaizvieto ar reālo API atbildi tiklīdz būs implementēts.
-        return {"response": "AI API response is not implemented yet."}
+        messages = [{"role": "system", "content": self.system_instruction}]
+        messages.extend(chat_history)
+        messages.append({"role": "user", "content": user_message})
+
+        # 5. SOLIS - HF API izsaukums ar diagnostiku
+        try:
+            response = self.client.chat_completion(
+                model="katanemo/Arch-Router-1.5B:hf-inference",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=256,
+            )
+        except Exception as e:
+            print("API izsaukuma kļūda:", e)
+            return {"response": f"Kļūda AI API izsaukumā: {e}"}
+
+        # 6. SOLIS - Atbildes apstrāde
+        try:
+            ai_message = response.choices[0].message.content
+            return {"response": ai_message}
+        except (AttributeError, IndexError):
+            return {"response": "AI atbilde nav pieejama."}
+
+
+# --- Testa palaišana ---
+if __name__ == "__main__":
+    bot = ChatbotService()
+    resp = bot.get_chatbot_response("Sveiki, kā klājas?")
+    print("AI atbilde:", resp)

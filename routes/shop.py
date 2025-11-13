@@ -1,10 +1,31 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# Izveido ChatbotService instanci
+chatbot_service = ChatbotService()
+
+@shop_bp.route('/chatbot', methods=['POST'])
+@login_required
+def chatbot():
+    # 1. SOLIS: Saņemt datus no pieprasījuma
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return jsonify({"error": "Message is required"}), 400
+
+    user_message = data['message']
+    # 2. SOLIS: Izsaukt get_chatbot_response
+    try:
+        response = chatbot_service.get_chatbot_response(user_message)
+        return jsonify({"response": response["response"]})  # <-- te ir vienīgais labojums
+    except Exception as e:
+        return jsonify({"error": f"Failed to get chatbot response: {str(e)}"}), 500
+
 
 def get_products_from_db():
     """

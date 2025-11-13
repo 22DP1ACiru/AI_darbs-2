@@ -22,3 +22,5 @@ Thumbs.db
 instance/
 
 *.log
+
+test.py

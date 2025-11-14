@@ -4,33 +4,53 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 class ChatbotService:
-    def __init__(self):
-        # 1. SOLIS - .env faila ielāde ar diagnostiku
+    def __init__(self, product_data=""):
         env_path = Path('.') / '.env'
         load_dotenv(dotenv_path=env_path)
         hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
-        # Diagnostika
         if hf_api_key is None:
-            raise ValueError(
-                "HUGGINGFACE_API_KEY nav iestatīts vai .env fails netika atrasts!"
-            )
+            raise ValueError("HUGGINGFACE_API_KEY nav iestatīts .env failā")
         else:
-            print("HUGGINGFACE_API_KEY ir veiksmīgi ielādēts (rādīts tikai sākuma daļa):", hf_api_key[:5] + "...")
+            print("HUGGINGFACE_API_KEY ielādēts:", hf_api_key[:5] + "...")
 
-        # 2. SOLIS - Hugging Face Inference klienta inicializācija
-        try:
-            self.client = InferenceClient(api_key=hf_api_key)
-            print("Hugging Face klienta inicializācija veiksmīga.")
-        except Exception as e:
-            raise ValueError(f"Neizdevās inicializēt HF klientu: {e}")
+        self.client = InferenceClient(api_key=hf_api_key)
+        self.product_data = product_data
+        self.system_instruction = f"""
+[INSTRUKCIJA]
+Tu esi e-veikala čatbots. 
+*Atbildes jāveido tikai par e-veikalu un produktiem.* 
+Ja jautājums ir par produktiem, grozu, cenām vai pasūtījumiem, atbildi tieši, izmantojot zemāk sarakstu:
+{product_data}
 
-        # 3. SOLIS - Sistēmas instrukcijas definēšana
-        self.system_instruction = (
-            "Tu esi draudzīgs un zinošs AI palīgs, kas palīdz lietotājam ar dažādiem jautājumiem."
-        )
+*Ja jautājums nav saistīts ar e-veikalu, atbildi:
+"Atvainojiet, es varu palīdzēt tikai ar jautājumiem par e-veikalu."*
+"""
+
+    def is_on_topic(self, user_message):
+        """
+        Vienkāršs filtrs, lai bloķētu ārpus tēmas jautājumus.
+        Ja ziņa satur vārdus, kas nav saistīti ar e-veikalu, atgriež False.
+        """
+        off_topic_keywords = [
+            "weather", "temperature", "news", "sports", "covid", "time",
+        "movie", "music", "politics", "travel", "flight", "tourism",
+        "restaurant", "hotel", "holiday", "celebrity", "stock", "finance",
+        "football", "soccer", "tennis", "basketball", "recipe", "recipe for",
+        "recipe of", "recipe", "recipe for", "recipe of", "programming",
+        "code", "python", "java", "javascript", "math", "calculation",
+        "joke", "funny", "humor", "game", "video game", "gaming", "tv show"
+        ]
+        user_lower = user_message.lower()
+        for kw in off_topic_keywords:
+            if kw in user_lower:
+                return False
+        return True
 
     def get_chatbot_response(self, user_message, chat_history=None):
+        if not self.is_on_topic(user_message):
+            return {"response": "Atvainojiet, es varu palīdzēt tikai ar jautājumiem par e-veikalu."}
+
         if chat_history is None:
             chat_history = []
 
@@ -38,27 +58,27 @@ class ChatbotService:
         messages.extend(chat_history)
         messages.append({"role": "user", "content": user_message})
 
-        # 5. SOLIS - HF API izsaukums ar diagnostiku
         try:
             response = self.client.chat_completion(
-                model="katanemo/Arch-Router-1.5B:hf-inference",
+                model="katanemo/Arch-Router-1.5B",
                 messages=messages,
                 temperature=0.7,
             )
-        except Exception as e:
-            print("API izsaukuma kļūda:", e)
-            return {"response": f"Kļūda AI API izsaukumā: {e}"}
-
-        # 6. SOLIS - Atbildes apstrāde
-        try:
             ai_message = response.choices[0].message.content
             return {"response": ai_message}
-        except (AttributeError, IndexError):
-            return {"response": "AI atbilde nav pieejama."}
+
+        except Exception as e:
+            print("API kļūda:", e)
+            return {"response": f"Kļūda AI API izsaukumā: {e}"}
 
 
 # --- Testa palaišana ---
 if __name__ == "__main__":
-    bot = ChatbotService()
-    resp = bot.get_chatbot_response("Sveiki, kā klājas?")
-    print("AI atbilde:", resp)
+    product_data = "- Produkts A, 10.99$\n- Produkts B, 5.50$\n- Produkts C, 20.00$"
+    bot = ChatbotService(product_data=product_data)
+
+    # On-topic example
+    print(bot.get_chatbot_response("Pastāsti par produktiem."))
+
+    # Off-topic example
+    print(bot.get_chatbot_response("Kāds ir laiks Dubajā?"))

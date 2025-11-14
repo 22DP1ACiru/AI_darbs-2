@@ -7,30 +7,7 @@ from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
-# Izveido ChatbotService instanci
-chatbot_service = ChatbotService()
-
-@shop_bp.route('/chatbot', methods=['POST'])
-@login_required
-def chatbot():
-    # 1. SOLIS: Saņemt datus no pieprasījuma
-    data = request.get_json()
-    if not data or 'message' not in data:
-        return jsonify({"error": "Message is required"}), 400
-
-    user_message = data['message']
-    # 2. SOLIS: Izsaukt get_chatbot_response
-    try:
-        response = chatbot_service.get_chatbot_response(user_message)
-        return jsonify({"response": response["response"]})  # <-- te ir vienīgais labojums
-    except Exception as e:
-        return jsonify({"error": f"Failed to get chatbot response: {str(e)}"}), 500
-
-
 def get_products_from_db():
-    """
-    Fetches all products from the database and formats them into a simple string for the LLM.
-    """
     try:
         products = Product.query.all()
         if not products:
@@ -44,6 +21,22 @@ def get_products_from_db():
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return jsonify({"error": "Message is required"}), 400
+
+    user_message = data['message']
+    product_data = get_products_from_db()
+    chatbot_service = ChatbotService(product_data=product_data)
+
+    try:
+        response = chatbot_service.get_chatbot_response(user_message)
+        return jsonify({"response": response["response"]})
+    except Exception as e:
+        return jsonify({"error": f"Failed to get chatbot response: {str(e)}"}), 500
 
 @shop_bp.route('/shop')
 def product_list():

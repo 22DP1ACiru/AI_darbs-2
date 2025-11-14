@@ -1,10 +1,14 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# inicializēt ChatbotService
+chatbot_service = ChatbotService()
 
 def get_products_from_db():
     """
@@ -15,14 +19,67 @@ def get_products_from_db():
         if not products:
             return "There are currently no products available in the shop."
         
-        product_list_str = "Here is a list of available products:\n"
+        product_list_str = "CURRENT PRODUCT INVENTORY:\n"
+        product_list_str += "=" * 50 + "\n"
+        
         for p in products:
-            product_list_str += f"- Name: {p.name}, Price: ${p.price:.2f}, Stock: {p.stock}\n"
+            stock_status = "In Stock" if p.stock > 0 else "Out of Stock"
+            product_list_str += f"• {p.name}\n"
+            product_list_str += f"  Price: ${p.price:.2f}\n"
+            product_list_str += f"  Stock: {p.stock} ({stock_status})\n"
+            if p.description:
+                # saīsināt garos aprakstus
+                desc = p.description[:100] + "..." if len(p.description) > 100 else p.description
+                product_list_str += f"  Description: {desc}\n"
+            product_list_str += "\n"
         
         return product_list_str
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    Handle chatbot requests from the frontend with product information.
+    """
+    try:
+        # saņemt JSON datus no pieprasījuma
+        data = request.get_json()
+        # validēt pieprasījuma datus
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'response': 'No data provided'
+            }), 400
+        
+        user_message = data.get('message')
+        chat_history = data.get('chat_history', [])
+        # validēt lietotāja ziņojumu
+        if not user_message or not user_message.strip():
+            return jsonify({
+                'status': 'error',
+                'response': 'Empty message'
+            }), 400
+        
+        # iegūt informāciju par produktiem no datu bāzes
+        products_info = get_products_from_db()
+        # saņemt chatbot atbildi
+        response_data = chatbot_service.get_chatbot_response(
+            user_message=user_message,
+            chat_history=chat_history,
+            products_info=products_info
+        )
+        
+        # atgriezt atbildi
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"Chatbot endpoint error: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'response': 'Internal server error. Please try again later.'
+        }), 500
 
 @shop_bp.route('/shop')
 def product_list():

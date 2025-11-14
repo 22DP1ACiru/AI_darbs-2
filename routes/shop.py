@@ -132,21 +132,41 @@ def purchase_history():
 def chatbot_endpoint():
     try:
         data = request.get_json()
-
         user_message = data.get("message", "").strip()
         history = data.get("history", [])
 
         if not user_message:
             return jsonify({"response": "No message provided."}), 400
 
-        # ----- 1. Create product catalog for AI -----
-        product_list_string = get_products_from_db()
+        # Nolasa datubazes produktus
+        products = Product.query.all()
+        if not products:
+            return jsonify({"response": "There are currently no products available in the shop."})
 
-        # ----- 2. Block unrelated questions -----
+        total_products = len(products)
+        total_price_sum = sum(p.price for p in products)
+        cheapest_product = min(products, key=lambda p: p.price)
+        most_expensive_product = max(products, key=lambda p: p.price)
+
+        # Build a factual system message for the AI
+        factual_info = f"""
+        Product catalog facts (do not hallucinate, only use these facts):
+        - Total products: {total_products}
+        - Sum of product prices: ${total_price_sum:.2f}
+        - Cheapest product: {cheapest_product.name} (${cheapest_product.price:.2f})
+        - Most expensive product: {most_expensive_product.name} (${most_expensive_product.price:.2f})
+        - Product list:
+        """
+        for p in products:
+            factual_info += f"- {p.name}, ${p.price:.2f}, Stock: {p.stock}\n"
+
+        # Atbild uz jautajumiem ar sekojosajiem atslegvardiem
         allowed_keywords = [
             "product", "price", "stock",
             "buy", "order", "shop",
-            "cart", "checkout"
+            "cart", "checkout", "find",
+            "sum", "cheapest", "most expensive",
+            "filter", "sort", "cost", "find", "cart" 
         ]
 
         if not any(keyword in user_message.lower() for keyword in allowed_keywords):
@@ -157,11 +177,11 @@ def chatbot_endpoint():
                 )
             })
 
-        # ----- 3. Get AI response INCLUDING product list -----
+        # APi atbilde
         result = chatbot.get_chatbot_response(
             user_message=user_message,
             chat_history=history,
-            extra_system_message=product_list_string
+            extra_system_message=factual_info
         )
 
         return jsonify(result)

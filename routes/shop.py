@@ -1,15 +1,13 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
 def get_products_from_db():
-    """
-    Fetches all products from the database and formats them into a simple string for the LLM.
-    """
     try:
         products = Product.query.all()
         if not products:
@@ -23,6 +21,22 @@ def get_products_from_db():
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return jsonify({"error": "Message is required"}), 400
+
+    user_message = data['message']
+    product_data = get_products_from_db()
+    chatbot_service = ChatbotService(product_data=product_data)
+
+    try:
+        response = chatbot_service.get_chatbot_response(user_message)
+        return jsonify({"response": response["response"]})
+    except Exception as e:
+        return jsonify({"error": f"Failed to get chatbot response: {str(e)}"}), 500
 
 @shop_bp.route('/shop')
 def product_list():

@@ -16,24 +16,30 @@ class ChatbotService:
         self.api_url = "https://router.huggingface.co/v1/chat/completions"
 
         self.system_instruction = (
-    "You are an AI shopping assistant for an online store. "
-    "You ONLY answer questions related to the products, prices, stock levels, "
-    "orders, shopping cart, checkout, or general information about the shop. "
-    "You DO NOT answer questions unrelated to the store. "
-    "If a user asks about anything outside the shop context, politely refuse "
-    "with a short message stating you can only help with store-related topics."
-)
+            "You are an AI shopping assistant for an online store. "
+            "You ONLY answer questions related to the products, prices, stock levels, "
+            "orders, shopping cart, checkout, or general information about the shop. "
+            "You DO NOT answer questions unrelated to the store. "
+            "If a user asks about anything outside the shop context, politely refuse "
+            "with a short message stating you can only help with store-related topics. "
+            "You MUST use the provided product catalog to answer product questions. "
+            "If the information is not in the catalog, say: "
+            "\"I don't have information about that product.\""
+        )
 
 
 
     # AI atbildes atgriezsana
-    def get_chatbot_response(self, user_message, chat_history=None):
+    def get_chatbot_response(self, user_message, chat_history=None, extra_system_message=""):
         if chat_history is None:
             chat_history = []
 
-        messages = [
-            {"role": "system", "content": self.system_instruction}
-        ]
+        system_message = {
+            "role": "system",
+            "content": self.system_instruction + "\n\n" + extra_system_message
+        }
+
+        messages = [system_message]
 
         # Pievieno sarunas vēsturi
         messages.extend(chat_history)

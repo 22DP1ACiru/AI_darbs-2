@@ -133,16 +133,35 @@ def chatbot_endpoint():
     try:
         data = request.get_json()
 
-        user_message = data.get("message", "")
+        user_message = data.get("message", "").strip()
         history = data.get("history", [])
 
         if not user_message:
             return jsonify({"response": "No message provided."}), 400
 
-        # Izsauc AI servisu
+        # ----- 1. Create product catalog for AI -----
+        product_list_string = get_products_from_db()
+
+        # ----- 2. Block unrelated questions -----
+        allowed_keywords = [
+            "product", "price", "stock",
+            "buy", "order", "shop",
+            "cart", "checkout"
+        ]
+
+        if not any(keyword in user_message.lower() for keyword in allowed_keywords):
+            return jsonify({
+                "response": (
+                    "I can only help with questions related to the store, "
+                    "products, orders, prices, or stock levels."
+                )
+            })
+
+        # ----- 3. Get AI response INCLUDING product list -----
         result = chatbot.get_chatbot_response(
             user_message=user_message,
-            chat_history=history
+            chat_history=history,
+            extra_system_message=product_list_string
         )
 
         return jsonify(result)

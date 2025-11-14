@@ -47,6 +47,17 @@
     ```
     Pēc noklusējuma vietne ir pieejama adresē `http://127.0.0.1:5000`.
 
+7. **SVARĪGI! Kļūda ar pēdējo OpenAI bibliotēkas versiju:**
+    Startējot aplikāciju var rasties kļūda ar tekstu:
+    ```
+    TypeError: Client.__init__() got an unexpected keyword argument 'proxies'
+    ```
+    Tā ir problēma ar jaunāko OpenAI bibliotēkas versiju, kurā ir mainījušies parametri. Lai to atrisinātu, vieglākais veids ir palaist šo komandu:
+    ```
+    !pip install openai==1.55.3 httpx==0.27.2 --force-reinstall
+    ```
+    Tā instalē stabīlu bibliotēkas versiju un instalē saderīgu httpx versiju.
+    Source: [Raised GitHub issue](https://github.com/vanna-ai/vanna/issues/730).
 ---
 
 ## Izveidotie lietotāju konti

@@ -3,6 +3,10 @@ from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from flask import jsonify
+from chatbot_integration.chatbot_service import ChatbotService
+
+chatbot = ChatbotService()
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
@@ -123,3 +127,26 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_endpoint():
+    try:
+        data = request.get_json()
+
+        user_message = data.get("message", "")
+        history = data.get("history", [])
+
+        if not user_message:
+            return jsonify({"response": "No message provided."}), 400
+
+        # Izsauc AI servisu
+        result = chatbot.get_chatbot_response(
+            user_message=user_message,
+            chat_history=history
+        )
+
+        return jsonify(result)
+
+    except Exception as e:
+        print("Chatbot error:", e)
+        return jsonify({"response": f"Server error: {str(e)}"}), 500

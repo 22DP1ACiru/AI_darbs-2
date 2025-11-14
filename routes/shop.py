@@ -3,6 +3,10 @@ from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from flask import jsonify
+from chatbot_integration.chatbot_service import ChatbotService
+
+chatbot = ChatbotService()
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
@@ -123,3 +127,65 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_endpoint():
+    try:
+        data = request.get_json()
+        user_message = data.get("message", "").strip()
+        history = data.get("history", [])
+
+        if not user_message:
+            return jsonify({"response": "No message provided."}), 400
+
+        # Nolasa datubazes produktus
+        products = Product.query.all()
+        if not products:
+            return jsonify({"response": "There are currently no products available in the shop."})
+
+        total_products = len(products)
+        total_price_sum = sum(p.price for p in products)
+        cheapest_product = min(products, key=lambda p: p.price)
+        most_expensive_product = max(products, key=lambda p: p.price)
+
+        # Build a factual system message for the AI
+        factual_info = f"""
+        Product catalog facts (do not hallucinate, only use these facts):
+        - Total products: {total_products}
+        - Sum of product prices: ${total_price_sum:.2f}
+        - Cheapest product: {cheapest_product.name} (${cheapest_product.price:.2f})
+        - Most expensive product: {most_expensive_product.name} (${most_expensive_product.price:.2f})
+        - Product list:
+        """
+        for p in products:
+            factual_info += f"- {p.name}, ${p.price:.2f}, Stock: {p.stock}\n"
+
+        # Atbild uz jautajumiem ar sekojosajiem atslegvardiem
+        allowed_keywords = [
+            "product", "price", "stock",
+            "buy", "order", "shop",
+            "cart", "checkout", "find",
+            "sum", "cheapest", "most expensive",
+            "filter", "sort", "cost", "find", "cart" 
+        ]
+
+        if not any(keyword in user_message.lower() for keyword in allowed_keywords):
+            return jsonify({
+                "response": (
+                    "I can only help with questions related to the store, "
+                    "products, orders, prices, or stock levels."
+                )
+            })
+
+        # APi atbilde
+        result = chatbot.get_chatbot_response(
+            user_message=user_message,
+            chat_history=history,
+            extra_system_message=factual_info
+        )
+
+        return jsonify(result)
+
+    except Exception as e:
+        print("Chatbot error:", e)
+        return jsonify({"response": f"Server error: {str(e)}"}), 500

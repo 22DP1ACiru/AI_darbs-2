@@ -20,7 +20,7 @@ class ChatbotService:
 
         # 2. SOLIS - Hugging Face Inference klienta inicializācija
         try:
-            self.client = InferenceClient(hf_api_key)
+            self.client = InferenceClient(api_key=hf_api_key)
             print("Hugging Face klienta inicializācija veiksmīga.")
         except Exception as e:
             raise ValueError(f"Neizdevās inicializēt HF klientu: {e}")
@@ -44,7 +44,6 @@ class ChatbotService:
                 model="katanemo/Arch-Router-1.5B:hf-inference",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=256,
             )
         except Exception as e:
             print("API izsaukuma kļūda:", e)

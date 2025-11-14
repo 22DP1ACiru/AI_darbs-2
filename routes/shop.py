@@ -19,9 +19,19 @@ def get_products_from_db():
         if not products:
             return "There are currently no products available in the shop."
         
-        product_list_str = "Here is a list of available products:\n"
+        product_list_str = "CURRENT PRODUCT INVENTORY:\n"
+        product_list_str += "=" * 50 + "\n"
+        
         for p in products:
-            product_list_str += f"- Name: {p.name}, Price: ${p.price:.2f}, Stock: {p.stock}\n"
+            stock_status = "In Stock" if p.stock > 0 else "Out of Stock"
+            product_list_str += f"• {p.name}\n"
+            product_list_str += f"  Price: ${p.price:.2f}\n"
+            product_list_str += f"  Stock: {p.stock} ({stock_status})\n"
+            if p.description:
+                # saīsināt garos aprakstus
+                desc = p.description[:100] + "..." if len(p.description) > 100 else p.description
+                product_list_str += f"  Description: {desc}\n"
+            product_list_str += "\n"
         
         return product_list_str
     except Exception as e:
@@ -31,7 +41,7 @@ def get_products_from_db():
 @shop_bp.route('/chatbot', methods=['POST'])
 def chatbot():
     """
-    Handle chatbot requests from the frontend.
+    Handle chatbot requests from the frontend with product information.
     """
     try:
         # saņemt JSON datus no pieprasījuma
@@ -52,8 +62,15 @@ def chatbot():
                 'response': 'Empty message'
             }), 400
         
+        # iegūt informāciju par produktiem no datu bāzes
+        products_info = get_products_from_db()
         # saņemt chatbot atbildi
-        response_data = chatbot_service.get_chatbot_response(user_message, chat_history)
+        response_data = chatbot_service.get_chatbot_response(
+            user_message=user_message,
+            chat_history=chat_history,
+            products_info=products_info
+        )
+        
         # atgriezt atbildi
         return jsonify(response_data)
         

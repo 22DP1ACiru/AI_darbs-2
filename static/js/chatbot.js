@@ -1,71 +1,82 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const chatbotToggler = document.querySelector(".chatbot-toggler");
-    const closeBtn = document.querySelector(".close-btn");
-    const chatbox = document.querySelector(".chatbox");
-    const chatInput = document.querySelector(".chat-input textarea");
-    const sendChatBtn = document.querySelector(".chat-input span");
+const chatbotToggler = document.querySelector(".chatbot-toggler");
+const closeBtn = document.querySelector(".close-btn");
+const chatbox = document.querySelector(".chatbox");
+const chatInput = document.querySelector(".chat-input textarea");
+const sendBtn = document.querySelector("#send-btn");
 
-    // 1. SOLIS: Izveidot mainīgo sarunas vēstures glabāšanai.
+let chatHistory = [];
 
-    const createChatLi = (message, className) => {
-        const chatLi = document.createElement("li");
-        chatLi.classList.add("chat", className);
-        let chatContent = className === "outgoing" ? `<p></p>` : `<span class="material-symbols-outlined">smart_toy</span><p></p>`;
-        chatLi.innerHTML = chatContent;
-        chatLi.querySelector("p").textContent = message;
-        return chatLi;
+// Add message to chatbox
+function addMessage(message, isBot) {
+    const li = document.createElement("li");
+    li.classList.add("chat", isBot ? "incoming" : "outgoing");
+
+    if (isBot) {
+        li.innerHTML = `
+            <span class="material-symbols-outlined">smart_toy</span>
+            <p>${message}</p>
+        `;
+    } else {
+        li.innerHTML = `<p>${message}</p>`;
     }
 
-    // 2. SOLIS: Implementēt funkciju, kas sazinās ar serveri.
-    const generateResponse = (incomingChatLi) => {
-        const API_URL = "/chatbot";
-        const messageElement = incomingChatLi.querySelector("p");
+    chatbox.appendChild(li);
+    chatbox.scrollTop = chatbox.scrollHeight;
+}
 
-        // TODO: Sagatavot pieprasījuma opcijas (request options)
-        // Izveidojiet JSON virknes objektu, kas satur gan pēdējo lietotāja ziņu, gan visu iepriekšējo sarunas vēsturi.
-        const requestOptions = {
-        };
+// Send message to backend
+async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
 
-        // TODO: Izsaukt `fetch()` ar izveidotajām opcijām.
-        // Pēc atbildes saņemšanas:
-        // 1. Atjaunojiet `messageElement` saturu ar saņemto atbildi.
-        // 2. Pievienojiet bota atbildi mainīgajā sarunas vēstures glabāšanai.
+    // Add user message
+    addMessage(message, false);
+    chatHistory.push({ role: "user", content: message });
+    chatInput.value = "";
+
+    // Temporary loading message
+    addMessage("Thinking...", true);
+    const loadingMessage = chatbox.lastElementChild;
+
+    try {
+        const response = await fetch("/chatbot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message: message,
+                history: chatHistory
+            })
+        });
+
+        const data = await response.json();
+
+        // Replace "Thinking..." with bot response
+        loadingMessage.querySelector("p").textContent = data.reply;
+
+        chatHistory.push({ role: "assistant", content: data.reply });
+
+    } catch (error) {
+        loadingMessage.querySelector("p").textContent =
+            "Error: Unable to contact the chatbot.";
     }
+}
 
-    const handleChat = () => {
-        const userMessage = chatInput.value.trim();
-        if(!userMessage) return;
+// Toggle chatbot (IMPORTANT FIX)
+chatbotToggler.addEventListener("click", () => {
+    document.body.classList.toggle("show-chatbot");
+});
 
-        chatInput.value = "";
-        chatInput.style.height = `auto`;
+closeBtn.addEventListener("click", () => {
+    document.body.classList.remove("show-chatbot");
+});
 
-        chatbox.appendChild(createChatLi(userMessage, "outgoing"));
-        chatbox.scrollTo(0, chatbox.scrollHeight);
-        
-        // 3. SOLIS: Pievienot lietotāja ziņu mainīgajā sarunas vēstures glabāšanai
-        // TODO: Pievienojiet ziņu masīvam pareizajā formātā (kā objektu ar "role" un "content").
-        
-        setTimeout(() => {
-            const incomingChatLi = createChatLi("Thinking...", "incoming");
-            chatbox.appendChild(incomingChatLi);
-            chatbox.scrollTo(0, chatbox.scrollHeight);
-            generateResponse(incomingChatLi);
-        }, 600);
+// Send message when clicking button
+sendBtn.addEventListener("click", sendMessage);
+
+// Send message with Enter
+chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
     }
-
-    chatInput.addEventListener("input", () => {
-        chatInput.style.height = `auto`;
-        chatInput.style.height = `${chatInput.scrollHeight}px`;
-    });
-
-    chatInput.addEventListener("keydown", (e) => {
-        if(e.key === "Enter" && !e.shiftKey && window.innerWidth > 800) {
-            e.preventDefault();
-            handleChat();
-        }
-    });
-
-    sendChatBtn.addEventListener("click", handleChat);
-    closeBtn.addEventListener("click", () => document.body.classList.remove("show-chatbot"));
-    chatbotToggler.addEventListener("click", () => document.body.classList.toggle("show-chatbot"));
 });

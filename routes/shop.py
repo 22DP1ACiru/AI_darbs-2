@@ -1,10 +1,21 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# Izveido vienu ChatbotService instanci, lai izvairītos no atkārtotas inicializācijas
+_chatbot_service = None
+
+def get_chatbot_service():
+    """Iegūst vai izveido ChatbotService instanci (singleton pattern)"""
+    global _chatbot_service
+    if _chatbot_service is None:
+        _chatbot_service = ChatbotService()
+    return _chatbot_service
 
 def get_products_from_db():
     """
@@ -123,3 +134,44 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    Chatbot endpoint, kas saņem lietotāja ziņu un atgriež chatbot atbildi.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'message' not in data:
+            return jsonify({"error": "Ziņa nav norādīta"}), 400
+        
+        user_message = data.get('message', '').strip()
+        chat_history = data.get('chat_history', [])
+        
+        if not user_message:
+            return jsonify({"error": "Ziņa nevar būt tukša"}), 400
+        
+        # Validācija, lai samazinātu liekus API pieprasījumus
+        if len(user_message) < 2:
+            return jsonify({"error": "Ziņa ir pārāk īsa"}), 400
+        
+        if len(user_message) > 500:
+            return jsonify({"error": "Ziņa ir pārāk gara (maksimums 500 rakstzīmes)"}), 400
+        
+        # Iegūst produktu sarakstu no datubāzes
+        products_info = get_products_from_db()
+        
+        # Iegūst chatbot servisa instanci un saņem atbildi
+        chatbot_service = get_chatbot_service()
+        response = chatbot_service.get_chatbot_response(
+            user_message=user_message,
+            chat_history=chat_history,
+            products_info=products_info
+        )
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        print(f"Chatbot endpoint kļūda: {e}")
+        return jsonify({"error": "Radās servera kļūda"}), 500

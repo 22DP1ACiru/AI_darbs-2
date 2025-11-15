@@ -1,28 +1,40 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
 
+from chatbot_integration.chatbot_service import ChatbotService
+import json
+
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# Viena ChatbotService instance moduļa līmenī
+_chatbot_service = ChatbotService()
 
 def get_products_from_db():
     """
-    Fetches all products from the database and formats them into a simple string for the LLM.
+    Fetches all products from the database and formats them into JSON string for the LLM.
     """
     try:
         products = Product.query.all()
         if not products:
-            return "There are currently no products available in the shop."
-        
-        product_list_str = "Here is a list of available products:\n"
+            return "[]"
+
+        items = []
         for p in products:
-            product_list_str += f"- Name: {p.name}, Price: ${p.price:.2f}, Stock: {p.stock}\n"
-        
-        return product_list_str
+            items.append({
+                "id": p.id,
+                "name": p.name,
+                "description": p.description or "",
+                "price": float(p.price),
+                "stock": int(p.stock)
+            })
+
+        return json.dumps(items, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
-        return "I was unable to access the product catalog."
+        return "[]"
 
 @shop_bp.route('/shop')
 def product_list():
@@ -123,3 +135,47 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_handler():
+    """
+    Endpoint saņem JSON:
+    {
+        "message": "User message",
+        "history": [{role: "user"|"assistant", content: "..."}, ...] (optional)
+    }
+    Atgriež:
+    { "reply": "AI response text" }
+    """
+
+    try:
+        data = request.get_json(force=True)
+    except Exception:
+        return jsonify({"reply": "Neizdevās nolasīt pieprasījuma datus."}), 400
+
+    user_message = data.get("message", "")
+    history = data.get("history", []) or []
+
+    if not isinstance(history, list):
+        history = []
+
+    # Sagatavojam produktu JSON
+    products_text = get_products_from_db()
+
+    # Izsaucam čatbotu
+    try:
+        result = _chatbot_service.get_chatbot_response(
+            user_message=user_message,
+            chat_history=history,
+            products_text=products_text
+        )
+    except Exception as e:
+        return jsonify({"reply": f"Server error: {str(e)}"}), 500
+
+    reply_text = result.get("response") if isinstance(result, dict) else str(result)
+
+    # Ja AI mēģina atbildēt ārpus JSON, pievienojam brīdinājumu
+    if reply_text and "izveidojiet jaunu produktu" in reply_text.lower():
+        reply_text = "Atvainojiet, es varu ieteikt tikai no esošā produktu saraksta."
+
+    return jsonify({"reply": reply_text})

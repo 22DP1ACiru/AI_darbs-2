@@ -1,8 +1,14 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
+import time
+
+# Simple in-memory rate limiter (per-IP). Keeps last request timestamp.
+_last_request_ts = {}
+RATE_LIMIT_SECONDS = 1.0  # minimum seconds between requests per IP
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
@@ -123,3 +129,36 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+
+# Chatbot endpoint for client-side integration
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json(silent=True) or {}
+    user_message = data.get('message') or data.get('user_message') or ''
+    chat_history = data.get('history') or []
+
+    # Rate limiting: simple per-IP limiter to avoid excessive API calls
+    client_ip = request.remote_addr or 'local'
+    now_ts = time.time()
+    last_ts = _last_request_ts.get(client_ip, 0)
+    if now_ts - last_ts < RATE_LIMIT_SECONDS:
+        return jsonify({"response": "", "error": "Rate limit: please wait a moment before sending another message."}), 429
+    _last_request_ts[client_ip] = now_ts
+
+    try:
+        svc = ChatbotService()
+
+        # Include product catalog in the user message so the model can reference it
+        try:
+            product_list = get_products_from_db()
+        except Exception:
+            product_list = "(product catalog unavailable)"
+
+        # combine user message with product catalog context
+        combined_message = f"{user_message}\n\nProduct catalog:\n{product_list}"
+
+        resp = svc.get_chatbot_response(combined_message, chat_history)
+        return jsonify(resp)
+    except Exception as e:
+        return jsonify({"response": "", "error": str(e)}), 500

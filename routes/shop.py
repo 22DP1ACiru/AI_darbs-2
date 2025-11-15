@@ -1,10 +1,56 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify # <-- Added jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
-
+from chatbot_integration.chatbot_service import ChatbotService 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# 🛑 AVOID: chatbot_service = ChatbotService() 
+# Instead, define a placeholder and initialize it later or use a dedicated factory function.
+chatbot_service = None
+
+def init_chatbot_service():
+    """Initializes the service when required."""
+    global chatbot_service
+    if chatbot_service is None:
+        try:
+            chatbot_service = ChatbotService()
+        except Exception as e:
+            # Handle potential initialization errors (like API key failure) gracefully
+            print(f"Failed to initialize ChatbotService: {e}")
+            chatbot_service = False # Mark as failed to avoid re-attempting initialization
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_api():
+    global chatbot_service
+    # Initialize the service if it hasn't been yet
+    if chatbot_service is None:
+        init_chatbot_service()
+
+    if chatbot_service is False:
+        return jsonify({"response": "Chatbot is temporarily unavailable due to startup error."}), 503
+
+    try:
+        data = request.get_json()
+        user_message = data.get('user_message')
+        chat_history = data.get('chat_history', [])
+
+        # ... rest of your logic ...
+        
+        product_data_context = get_products_from_db()
+        full_user_message = f"Product Data Context: {product_data_context}\n\nUser Question: {user_message}"
+
+        response_data = chatbot_service.get_chatbot_response(full_user_message, chat_history)
+
+        # ... error checking ...
+        
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"FATAL CHATBOT SERVER ERROR: {e}")
+        return jsonify({"response": "An unexpected server error occurred. Check server logs."}), 500
+
 
 def get_products_from_db():
     """

@@ -73,3 +73,15 @@ Ja, mēģinot aktivizēt virtuālo vidi ar komandu `.\venv\Scripts\activate`, j�
 Atveriet termināli kā **administrators** un izpildiet šo komandu, lai atļautu skriptu izpildi tikai pašreizējā sesijā:
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+```
+
+# AI testēšana
+## Iegūt informāciju par produktu
+Čatbots cenšās uzturēt kontaktu ar lietotāju un palīdz izvēlēties kādu no mājaslapā piejamajiem produktiem.
+
+## AI atbild tikai par produktiem
+Ja lietotājs ieraksta kaut ko bīstamu, vai kaut ko kas nav saistīts ar produkta iegādi AI atbildēs ar frāzi "I cannot help with that."
+
+## Screenshot ar AI testiem
+![alt text](image.png)
+![alt text](image-1.png)

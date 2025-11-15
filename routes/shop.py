@@ -1,10 +1,24 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# Lazy-loaded ChatbotService
+chatbot_service = None
+
+def get_chatbot_service():
+    """
+    Loads ChatbotService only once to avoid circular imports.
+    """
+    global chatbot_service
+    if chatbot_service is None:
+        from chatbot_integration.chatbot_service import ChatbotService
+        chatbot_service = ChatbotService()
+    return chatbot_service
+
 
 def get_products_from_db():
     """
@@ -18,16 +32,71 @@ def get_products_from_db():
         product_list_str = "Here is a list of available products:\n"
         for p in products:
             product_list_str += f"- Name: {p.name}, Price: ${p.price:.2f}, Stock: {p.stock}\n"
+            if p.description:
+                product_list_str += f"  Description: {p.description}\n"
         
         return product_list_str
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
 
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    Chatbot endpoint that processes user messages and returns AI responses.
+    """
+    try:
+        # Parse JSON data
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                "response": "Invalid request format.",
+                "success": False
+            }), 400
+
+        user_message = data.get('message', '').strip()
+        chat_history = data.get('history', [])
+
+        # Validate user message
+        if not user_message:
+            return jsonify({
+                "response": "Please enter a message.",
+                "success": False
+            }), 400
+
+        # Get product list for the LLM
+        product_info = get_products_from_db()
+
+        # PROPERLY INITIALIZE THE CHATBOT SERVICE
+        service = get_chatbot_service()
+
+        # Get chatbot response
+        response = service.get_chatbot_response(
+            user_message=user_message,
+            chat_history=chat_history,
+            product_info=product_info
+        )
+
+        # Return JSON response
+        return jsonify(response), 200
+
+    except Exception as e:
+        print(f"Error in chatbot endpoint: {str(e)}")
+        return jsonify({
+            "response": "An unexpected error occurred. Please try again later.",
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+
 @shop_bp.route('/shop')
 def product_list():
     products = Product.query.all()
     return render_template('shop/product_list.html', title='Shop', products=products)
+
 
 @shop_bp.route('/product/<int:product_id>', methods=['GET', 'POST'])
 def product_detail(product_id):
@@ -60,12 +129,14 @@ def product_detail(product_id):
     
     return render_template('shop/product_detail.html', title=product.name, product=product, form=form)
 
+
 @shop_bp.route('/cart')
 @login_required
 def cart():
     cart_items = current_user.cart_items.all()
     total_price = sum(item.product.price * item.quantity for item in cart_items)
     return render_template('cart.html', title='Your Cart', cart_items=cart_items, total_price=total_price)
+
 
 @shop_bp.route('/cart/remove/<int:item_id>')
 @login_required
@@ -79,6 +150,7 @@ def remove_from_cart(item_id):
     db.session.commit()
     flash('Item removed from cart.', 'success')
     return redirect(url_for('shop.cart'))
+
 
 @shop_bp.route('/checkout', methods=['GET', 'POST'])
 @login_required
@@ -117,6 +189,7 @@ def checkout():
         return redirect(url_for('shop.purchase_history'))
     
     return render_template('checkout.html', title='Checkout', cart_items=cart_items, total_amount=total_amount, form=checkout_form)
+
 
 @shop_bp.route('/purchase_history')
 @login_required

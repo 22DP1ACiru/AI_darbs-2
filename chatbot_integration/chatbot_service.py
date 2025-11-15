@@ -1,34 +1,53 @@
+from huggingface_hub import InferenceClient
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
 
 class ChatbotService:
     def __init__(self):
-        # TODO: 1. SOLIS - API atslēgas ielāde
-        # load_dotenv(), lai ielādētu mainīgos no .env faila.
-        # os.getenv(), lai nolasītu "HUGGINGFACE_API_KEY".
+        load_dotenv()
+        self.api_key = os.getenv("HUGGINGFACE_API_KEY")
+        if not self.api_key:
+            raise RuntimeError("HUGGINGFACE_API_KEY is not set in the .env file.")
 
-        # TODO: 2. SOLIS - OpenAI klienta inicializācija izmantojot "katanemo/Arch-Router-1.5B" modeli
-        self.client = None
-
-        # TODO: 3. SOLIS - Sistēmas instrukcijas definēšana
-        self.system_instruction = (
-        )
+        # HF InferenceClient with chat endpoint
+        self.client = InferenceClient(token=self.api_key)
 
     def get_chatbot_response(self, user_message, chat_history=None):
         if chat_history is None:
             chat_history = []
-            
-        # TODO: 4. SOLIS - Ziņojumu saraksta izveide masīvā
-        # Tajā jābūt sistēmas instrukcijai, visai sarunas vēsture un pēdējai lietotāja ziņa.
-        # 1. Sistēmas instrukcija (role: "system")
-        # 2. Visa iepriekšējā sarunas vēsture (izmantojot .extend(), lai pievienotu visus elementus no chat_history)
-        # 3. Pēdējā lietotāja ziņa (role: "user")
-        
-        # TODO: 5. SOLIS - HF API izsaukums ar OpenAI bibliotēku, izmantojot chat.completions.create().
-        
-        # TODO: 6. SOLIS - Atbildes apstrāde un atgriešana
-        # chat.completions.create() atgriež objektu ar "choices" sarakstu, tajā jāparbauda, vai ir pieejama atbilde
 
-        # Pagaidu atbilde, kas jāaizvieto ar reālo API atbildi tiklīdz būs implementēts.
-        return {"response": "AI API response is not implemented yet."}
+        # Get products from the DB as a simple list
+        from routes.shop import get_products_from_db
+        products_info = get_products_from_db()
+
+        # Strict system instruction
+        system_instruction = (
+            "You are an online store assistant. Only answer questions about available store products, "
+            "orders, delivery, and returns. "
+            "If a question is not related to the store, respond only: 'I can only assist with store-related information.'\n"
+            "Available products:\n"
+            f"{products_info}"
+        )
+
+        # Build messages list
+        messages = [{"role": "system", "content": system_instruction}]
+        messages.extend(chat_history)
+        messages.append({"role": "user", "content": user_message})
+
+        # HF API call
+        try:
+            response = self.client.chat.completions.create(
+                model="katanemo/Arch-Router-1.5B",
+                messages=messages,
+                temperature=0.0,
+                max_tokens=256
+            )
+        except Exception as e:
+            return {"response": f"An error occurred with the HF API call: {str(e)}"}
+
+        # Process response
+        if response and hasattr(response, "choices") and len(response.choices) > 0:
+            bot_reply = response.choices[0].message.get("content", "").strip()
+            return {"response": bot_reply}
+        else:
+            return {"response": "HF API did not return a response."}

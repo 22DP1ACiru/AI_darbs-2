@@ -1,15 +1,16 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService  # chatbot service import
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
+# Initialize the chatbot service
+chatbot_service = ChatbotService()
+
 def get_products_from_db():
-    """
-    Fetches all products from the database and formats them into a simple string for the LLM.
-    """
     try:
         products = Product.query.all()
         if not products:
@@ -24,6 +25,7 @@ def get_products_from_db():
         print(f"Error fetching products from DB: {e}")
         return "I was unable to access the product catalog."
 
+# ------------------ Store endpoints ------------------
 @shop_bp.route('/shop')
 def product_list():
     products = Product.query.all()
@@ -123,3 +125,16 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+# ------------------ New /chatbot endpoint ------------------
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json()
+    user_message = data.get("message", "")
+    chat_history = data.get("history", [])
+
+    if not user_message:
+        return jsonify({"response": "Message is empty."}), 400
+
+    response = chatbot_service.get_chatbot_response(user_message, chat_history)
+    return jsonify(response)

@@ -1,10 +1,21 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
+# Create a Flask Blueprint for shop-related routes
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+chatbot_service = ChatbotService()
+# Define the /chatbot endpoint to handle chatbot requests from the frontend
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json()
+    user_message = data.get('message', '')
+    chat_history = data.get('history', [])
+    result = chatbot_service.get_chatbot_response(user_message, chat_history)
+    return jsonify(result)
 
 def get_products_from_db():
     """

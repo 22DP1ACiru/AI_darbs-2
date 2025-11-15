@@ -1,8 +1,12 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
+
+# instantiate chatbot service for endpoint usage
+chatbot_service = ChatbotService()
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
@@ -123,3 +127,35 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_endpoint():
+    """
+    Endpoint for chatbot interactions with product context integration
+    """
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        chat_history = data.get('chat_history', [])
+        
+        if not user_message:
+            return jsonify({"response": "Please provide a message."}), 400
+        
+        # Get current product context to include in the query
+        product_context = get_products_from_db()
+        
+        # Get chatbot response with product context
+        bot_response = chatbot_service.get_chatbot_response(
+            user_message=user_message,
+            chat_history=chat_history,
+            product_context=product_context
+        )
+        
+        return jsonify(bot_response)
+        
+    except Exception as e:
+        print(f"Error in chatbot endpoint: {e}")
+        return jsonify({"response": "Sorry, I encountered an error. Please try again."}), 500
+

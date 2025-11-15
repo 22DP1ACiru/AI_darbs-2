@@ -1,33 +1,41 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+# Инициализируем ChatbotService один раз при загрузке модуля для эффективности
+chatbot_service = ChatbotService()
+
 
 def get_products_from_db():
     """
     Fetches all products from the database and formats them into a simple string for the LLM.
+    Returns a formatted string with product information.
     """
     try:
         products = Product.query.all()
         if not products:
             return "There are currently no products available in the shop."
-        
-        product_list_str = "Here is a list of available products:\n"
+
+        product_list_str = "Available products in the e-shop:\n"
         for p in products:
-            product_list_str += f"- Name: {p.name}, Price: ${p.price:.2f}, Stock: {p.stock}\n"
-        
+            product_list_str += f"- {p.name}: ${p.price:.2f} (Stock: {p.stock} units)\n"
+
         return product_list_str
     except Exception as e:
         print(f"Error fetching products from DB: {e}")
-        return "I was unable to access the product catalog."
+        return "Unable to access the product catalog at this moment."
+
 
 @shop_bp.route('/shop')
 def product_list():
     products = Product.query.all()
     return render_template('shop/product_list.html', title='Shop', products=products)
+
 
 @shop_bp.route('/product/<int:product_id>', methods=['GET', 'POST'])
 def product_detail(product_id):
@@ -52,13 +60,14 @@ def product_detail(product_id):
             cart_item.quantity += quantity
         else:
             cart_item = CartItem(user_id=current_user.id, product_id=product.id, quantity=quantity)
-        
+
         db.session.add(cart_item)
         db.session.commit()
         flash(f'{quantity} x {product.name} added to your cart!', 'success')
         return redirect(url_for('shop.cart'))
-    
+
     return render_template('shop/product_detail.html', title=product.name, product=product, form=form)
+
 
 @shop_bp.route('/cart')
 @login_required
@@ -67,6 +76,7 @@ def cart():
     total_price = sum(item.product.price * item.quantity for item in cart_items)
     return render_template('cart.html', title='Your Cart', cart_items=cart_items, total_price=total_price)
 
+
 @shop_bp.route('/cart/remove/<int:item_id>')
 @login_required
 def remove_from_cart(item_id):
@@ -74,11 +84,12 @@ def remove_from_cart(item_id):
     if cart_item.user_id != current_user.id:
         flash('You are not authorized to remove this item.', 'danger')
         return redirect(url_for('shop.cart'))
-    
+
     db.session.delete(cart_item)
     db.session.commit()
     flash('Item removed from cart.', 'success')
     return redirect(url_for('shop.cart'))
+
 
 @shop_bp.route('/checkout', methods=['GET', 'POST'])
 @login_required
@@ -111,15 +122,73 @@ def checkout():
             product.stock -= item.quantity
             db.session.add(order_item)
             db.session.delete(item)
-        
+
         db.session.commit()
         flash('Your order has been placed successfully!', 'success')
         return redirect(url_for('shop.purchase_history'))
-    
-    return render_template('checkout.html', title='Checkout', cart_items=cart_items, total_amount=total_amount, form=checkout_form)
+
+    return render_template('checkout.html', title='Checkout', cart_items=cart_items, total_amount=total_amount,
+                           form=checkout_form)
+
 
 @shop_bp.route('/purchase_history')
 @login_required
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    """
+    Chatbot endpoint for handling AI-powered customer assistance.
+
+    Accepts JSON with user message and chat history.
+    Returns AI-generated response based on available products.
+
+    Expected JSON format:
+    {
+        "message": "user question",
+        "history": [{"role": "user/assistant", "content": "..."}]
+    }
+    """
+    try:
+        # Валидация запроса
+        data = request.get_json()
+
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        user_message = data.get('message', '').strip()
+        chat_history = data.get('history', [])
+
+        # Проверка на пустое сообщение
+        if not user_message:
+            return jsonify({"error": "Message cannot be empty"}), 400
+
+        # Проверка на слишком длинное сообщение (защита от злоупотреблений)
+        if len(user_message) > 1000:
+            return jsonify({"error": "Message is too long"}), 400
+
+        # Получаем актуальную информацию о продуктах из базы данных
+        products_info = get_products_from_db()
+
+        # Дополняем контекст пользовательского запроса информацией о продуктах
+        # Это позволяет AI давать точные ответы на основе реального каталога
+        enhanced_message = f"{products_info}\n\nCustomer question: {user_message}"
+
+        # Получаем ответ от AI чатбота
+        response = chatbot_service.get_chatbot_response(enhanced_message, chat_history)
+
+        # Возвращаем ответ в JSON формате
+        return jsonify(response), 200
+
+    except ValueError as ve:
+        # Обработка ошибок валидации (например, отсутствие API ключа)
+        print(f"Validation error in chatbot endpoint: {ve}")
+        return jsonify({"error": "Configuration error. Please contact support."}), 500
+
+    except Exception as e:
+        # Обработка непредвиденных ошибок
+        print(f"Unexpected error in chatbot endpoint: {e}")
+        return jsonify({"error": "An error occurred. Please try again later."}), 500

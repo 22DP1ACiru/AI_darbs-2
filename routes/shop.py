@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+# routes/shop.py (full file with additions)
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService  # Import the service
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
@@ -123,3 +125,27 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json()
+    user_message = data.get('message')
+    chat_history = data.get('chat_history', [])
+
+    if not user_message:
+        return jsonify({"error": "No message provided"}), 400
+
+    # Get product list
+    product_list_str = get_products_from_db()
+
+    # Enhance the system instruction by appending product list (since new instance per request)
+    chatbot_service = ChatbotService()
+    chatbot_service.system_instruction += f"\n\nAvailable products:\n{product_list_str}"
+
+    # Get response
+    result = chatbot_service.get_chatbot_response(user_message, chat_history)
+
+    if "error" in result:
+        return jsonify({"error": result["error"]}), 500
+
+    return jsonify({"response": result["response"]})

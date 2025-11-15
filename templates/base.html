@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E-Shop - {{ title }}</title>
+    <!-- 1. SOLIS: Iekļaujam CSS un Google fontus (materiāla ikonas) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 </head>
 <body>
     <header>
+        <!-- 2. SOLIS: Navigācija ar saiti uz lapas galvenajām daļām -->
         <nav>
             <a href="{{ url_for('index') }}" class="logo">My E-Shop</a>
             <ul>
@@ -37,6 +39,7 @@
 
     <main>
         <div class="container">
+            <!-- 3. SOLIS: Uzspraust Flash ziņas uz lapas -->
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -44,6 +47,7 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
+            <!-- 4. SOLIS: Galvenais HTML saturs tiek ģenerēts ar block content -->
             {% block content %}{% endblock %}
         </div>
     </main>
@@ -52,6 +56,7 @@
         <p>&copy; 2025 My E-Shop. All rights reserved.</p>
     </footer>
 
+    <!-- 5. SOLIS: Čata logs ar HTML interfeisu -->
     <button class="chatbot-toggler">
         <span class="material-symbols-rounded">mode_comment</span>
         <span class="material-symbols-outlined">close</span>
@@ -64,17 +69,19 @@
         <ul class="chatbox">
             <li class="chat incoming">
                 <span class="material-symbols-outlined">smart_toy</span>
-                <p>Hi there! How can I help you today?</p>
+                <p>Sveiki! Kā varu jums palīdzēt?</p>
             </li>
         </ul>
         <div class="chat-input">
-            <textarea placeholder="Enter a message..." spellcheck="false" required></textarea>
+            <textarea placeholder="Ieraksti jautājumu..." spellcheck="false" required></textarea>
             <span id="send-btn" class="material-symbols-rounded">send</span>
         </div>
     </div>
 
+    <!-- 6. SOLIS: Iekļaujam JS failu čatam -->
     <script src="{{ url_for('static', filename='js/chatbot.js') }}" defer></script>
 
+    <!-- 7. SOLIS: Dropdown logika konta izvēlnē -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var dropbtn = document.querySelector('.dropbtn');

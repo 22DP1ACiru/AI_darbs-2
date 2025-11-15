@@ -2,7 +2,7 @@ from flask import Flask, render_template, flash, redirect, url_for
 from config import Config
 from database import db
 from models import User
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager
 import os
 
 def create_app():
@@ -19,13 +19,14 @@ def create_app():
     def load_user(id):
         return db.session.get(User, int(id))
 
-    # Register blueprints
+    # Регистрация blueprint'ов
     from routes.auth import auth_bp
     from routes.shop import shop_bp
     from routes.admin import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(shop_bp)
+    from routes.shop import chatbot_service  # ВАЖНО: активирует /chatbot
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
     @app.route('/')
@@ -33,7 +34,6 @@ def create_app():
     def index():
         return render_template('index.html', title='Home')
 
-    # Create database tables if they don't exist
     with app.app_context():
         db.create_all()
 

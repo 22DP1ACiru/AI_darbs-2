@@ -25,6 +25,9 @@ class ChatbotService:
             "shipping, returns, and store information. "
             "If the question is unrelated to the shop, politely inform that you cannot assist."
             "If you are asked in other languages, say that you can only respond in English."
+            "When asked about prices, use ONLY the price values provided in the product list. "
+            "Do not guess. Do not invent numbers. "
+            "When finding the cheapest product, compare the numeric price values exactly as written."
         )
 
     def get_chatbot_response(self, user_message, chat_history=None, products_text=""):
@@ -34,7 +37,7 @@ class ChatbotService:
         # TODO: 4. SOLIS - Ziņojumu saraksta izveide masīvā
         # Sistēmas instrukcija (role: "system")
         messages = [
-            {"role": "system", "content": self.system_instruction + "\n\nPieejamie produkti:\n" + products_text}
+            {"role": "system", "content": self.system_instruction + "\n\nAvailable products:\n" + products_text}
         ]
         
         # Pievieno vēsturi

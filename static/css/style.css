@@ -720,6 +720,35 @@ body.show-chatbot .chatbot-box {
     visibility: visible;
 }
 
+.chat.incoming p {
+    background: #f5f5f5;
+    color: #222;
+    padding: 10px 14px;
+    border-radius: 10px;
+    max-width: 95%;
+    line-height: 1.4;
+    white-space: normal;
+}
+
+.chat.outgoing p {
+    background: #0066ff;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 10px;
+    max-width: 95%;
+    line-height: 1.4;
+    white-space: normal;
+}
+
+/* Atļauj HTML formatējumu (li, br, strong) čata burbuļos */
+.chatbox p ul {
+    margin-left: 10px;
+}
+.chatbox li {
+    list-style-type: disc;
+}
+
+
 /* Responsive adjustments */
 @media (max-width: 490px) {
     .chatbot-box {

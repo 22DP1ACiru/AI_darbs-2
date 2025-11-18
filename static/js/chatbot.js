@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendChatBtn = document.querySelector(".chat-input span");
 
     // 1. SOLIS: Izveidot mainīgo sarunas vēstures glabāšanai.
+    let chatHistory = [];
 
     const createChatLi = (message, className) => {
         const chatLi = document.createElement("li");
@@ -24,12 +25,39 @@ document.addEventListener('DOMContentLoaded', () => {
         // TODO: Sagatavot pieprasījuma opcijas (request options)
         // Izveidojiet JSON virknes objektu, kas satur gan pēdējo lietotāja ziņu, gan visu iepriekšējo sarunas vēsturi.
         const requestOptions = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                history: chatHistory
+            })
         };
 
         // TODO: Izsaukt `fetch()` ar izveidotajām opcijām.
         // Pēc atbildes saņemšanas:
         // 1. Atjaunojiet `messageElement` saturu ar saņemto atbildi.
         // 2. Pievienojiet bota atbildi mainīgajā sarunas vēstures glabāšanai.
+        fetch(API_URL, requestOptions)
+            .then(res => res.json())
+            .then(data => {
+                const botReply = data.response || "Sorry, I couldn't get a response from the AI model.";
+
+                // 1. Nomainām "Thinking..." tekstu reālajā čata ziņā
+                messageElement.textContent = botReply;
+
+                // 2. Pievienojam bota atbildi vēsturei
+                chatHistory.push({
+                    role: "assistant",
+                    content: botReply
+                });
+
+                // Pabīdam čatu uz leju
+                chatbox.scrollTo(0, chatbox.scrollHeight);
+})
+            .catch(error => {
+                console.error("Fetch error:", error);
+            });      
     }
 
     const handleChat = () => {
@@ -44,6 +72,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 3. SOLIS: Pievienot lietotāja ziņu mainīgajā sarunas vēstures glabāšanai
         // TODO: Pievienojiet ziņu masīvam pareizajā formātā (kā objektu ar "role" un "content").
+        chatHistory.push({
+            role: "user",
+            content: userMessage
+        });
+
         
         setTimeout(() => {
             const incomingChatLi = createChatLi("Thinking...", "incoming");

@@ -1,10 +1,15 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
+
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
+
+chatbot_service = ChatbotService()
+
 
 def get_products_from_db():
     """
@@ -123,3 +128,33 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot_endpoint():
+    data = request.get_json() or {}
+    history = data.get("history", [])
+
+    user_message = ""
+    chat_history = []
+
+    if history:
+        # Pēdējā ziņa ir lietotāja ziņa, pārējās – sarunas vēsture
+        last_entry = history[-1]
+        user_message = last_entry.get("content", "")
+        chat_history = history[:-1]
+
+    # Pievienojam produktu sarakstu lietotāja ziņai,
+    # lai MI modelis varētu atsaukties uz reālajiem produktiem.
+    products_str = get_products_from_db()
+    user_message_with_products = (
+        f"{user_message}\n\n"
+        f"Šis ir veikala preču katalogs, uz kuru vari atsaukties atbildē:\n{products_str}"
+    )
+
+    # Izsaucam čatbota servisu
+    response = chatbot_service.get_chatbot_response(
+        user_message=user_message_with_products,
+        chat_history=chat_history
+    )
+
+    return jsonify(response)

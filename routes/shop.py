@@ -1,8 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from models import Product, CartItem, Order, OrderItem
 from database import db
 from flask_login import current_user, login_required
 from forms import AddToCartForm, CheckoutForm
+from chatbot_integration.chatbot_service import ChatbotService
 
 shop_bp = Blueprint('shop', __name__, template_folder='../templates')
 
@@ -15,9 +16,9 @@ def get_products_from_db():
         if not products:
             return "There are currently no products available in the shop."
         
-        product_list_str = "Here is a list of available products:\n"
+        product_list_str = "Pieejamie produkti veikalā:\n"
         for p in products:
-            product_list_str += f"- Name: {p.name}, Price: ${p.price:.2f}, Stock: {p.stock}\n"
+            product_list_str += f"- Nosaukums: {p.name}, cena: ${p.price:.2f}, atlikums: {p.stock}\n"
         
         return product_list_str
     except Exception as e:
@@ -123,3 +124,31 @@ def checkout():
 def purchase_history():
     orders = current_user.orders.order_by(Order.order_date.desc()).all()
     return render_template('purchase_history.html', title='Purchase History', orders=orders)
+
+@shop_bp.route('/chatbot', methods=['POST'])
+def chatbot():
+    data = request.get_json()
+    user_message = data.get('message')
+    chat_history = data.get('history', [])
+
+    if not user_message:
+        return jsonify({"response": "Ziņa nav saņemta"}), 400
+
+    products_info = get_products_from_db()
+
+    system_instruction_with_products = (
+        "You are a friendly and helpful online shop chatbot. ALWAYS answer ONLY in English. "
+        "Help the user with questions about products, delivery, and purchases. "
+        "Answer briefly and clearly. "
+        "Product information: " + products_info + "\n"
+        "Answer only questions related to the online shop and its products. "
+        "If the question is not about the shop, reply that you cannot help."
+        "If user asks unrelated questions, respond with: 'I am sorry, but I can only assist with questions related to the online shop and its products.' "
+        "When listing products or information, do NOT add unnecessary characters such as *, -, or quotation marks unless they are part of the actual product name. "
+        "Write lists cleanly and simply."
+    )
+
+    chatbot_service = ChatbotService(system_instruction_with_products)
+
+    result = chatbot_service.get_chatbot_response(user_message, chat_history)
+    return jsonify(result)

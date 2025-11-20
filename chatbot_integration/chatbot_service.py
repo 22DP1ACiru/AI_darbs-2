@@ -1,34 +1,53 @@
 import os
-from openai import OpenAI
+from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 
 class ChatbotService:
-    def __init__(self):
-        # TODO: 1. SOLIS - API atslēgas ielāde
-        # load_dotenv(), lai ielādētu mainīgos no .env faila.
-        # os.getenv(), lai nolasītu "HUGGINGFACE_API_KEY".
+    def __init__(self, system_instruction: str):
+        load_dotenv()
+        HF_TOKEN = os.getenv("HF_TOKEN")
 
-        # TODO: 2. SOLIS - OpenAI klienta inicializācija izmantojot "katanemo/Arch-Router-1.5B" modeli
-        self.client = None
+        if not HF_TOKEN:
+            raise ValueError("HF_TOKEN missing in .env file!")
 
-        # TODO: 3. SOLIS - Sistēmas instrukcijas definēšana
-        self.system_instruction = (
-        )
+        self.client = InferenceClient(token=HF_TOKEN)
+        self.system_instruction = system_instruction
+        print(system_instruction)
 
-    def get_chatbot_response(self, user_message, chat_history=None):
-        if chat_history is None:
-            chat_history = []
-            
-        # TODO: 4. SOLIS - Ziņojumu saraksta izveide masīvā
-        # Tajā jābūt sistēmas instrukcijai, visai sarunas vēsture un pēdējai lietotāja ziņa.
-        # 1. Sistēmas instrukcija (role: "system")
-        # 2. Visa iepriekšējā sarunas vēsture (izmantojot .extend(), lai pievienotu visus elementus no chat_history)
-        # 3. Pēdējā lietotāja ziņa (role: "user")
+    def ask(self, message: str, history=None) -> str:
+        try:
+            messages = []
+
+            if self.system_instruction:
+                messages.append({"role": "system", "content": self.system_instruction})
+
+            if history:
+                messages.extend(history)
+
+            messages.append({"role": "user", "content": message})
+
+            response = self.client.chat.completions.create(
+                model="katanemo/Arch-Router-1.5B",
+                messages=messages,
+                max_tokens=500,
+                temperature=0.7
+            )
+
+            return response.choices[0].message["content"].strip()
+
+        except Exception as e:
+            print("HF chat error:", e)
+            return "AI API error."
+
+    def get_chatbot_response(self, message: str, history: list):
+        answer = self.ask(message, history)
+
+        return {
+            "response": answer
+        }
+
+
+
+
+
         
-        # TODO: 5. SOLIS - HF API izsaukums ar OpenAI bibliotēku, izmantojot chat.completions.create().
-        
-        # TODO: 6. SOLIS - Atbildes apstrāde un atgriešana
-        # chat.completions.create() atgriež objektu ar "choices" sarakstu, tajā jāparbauda, vai ir pieejama atbilde
-
-        # Pagaidu atbilde, kas jāaizvieto ar reālo API atbildi tiklīdz būs implementēts.
-        return {"response": "AI API response is not implemented yet."}
